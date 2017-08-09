@@ -22,51 +22,51 @@ func FindRoot() (string, error) {
 	for {
 		files, err := filepath.Glob(file)
 		if err != nil {
-			return err
+			return "", err
 		}
 		if len(files) == 1 {
 			file, err = filepath.Abs(filepath.Dir(file))
 			if err != nil {
-				return err
+				return "", err
 			}
-			return file
+			return file, nil
 		}
 		file = filepath.Join("..", file)
 	}
 }
 
-func PackageUniquelyVersionedBuildpack() (PackagedBuildpack, error) {
+func PackageUniquelyVersionedBuildpack() (VersionedBuildpackPackage, error) {
 	bpDir, err := FindRoot()
 	if err != nil {
-		return nil, err
+		return VersionedBuildpackPackage{}, err
 	}
 
 	data, err := ioutil.ReadFile(filepath.Join(bpDir, "VERSION"))
 	if err != nil {
-		return nil, err
+		return VersionedBuildpackPackage{}, err
 	}
-	buildpackVersion = string(data)
+	buildpackVersion := string(data)
 	buildpackVersion = fmt.Sprintf("%s.%s", buildpackVersion, time.Now().Format("20060102150405"))
 
-	file, err := packager.Package(bpDir, packager.CacheDir, buildpackVersion, cutlass.Cached)
+	file, err := packager.Package(bpDir, packager.CacheDir, buildpackVersion, Cached)
 	if err != nil {
-		return nil, err
+		return VersionedBuildpackPackage{}, err
 	}
 
 	var manifest struct {
 		Language string `yaml:"language"`
 	}
-	err := libbuildpack.NewYAML().Load(filepath.Join(bpDir, "manifest.yml"), &manifest)
+	err = libbuildpack.NewYAML().Load(filepath.Join(bpDir, "manifest.yml"), &manifest)
 	if err != nil {
-		return nil, err
+		return VersionedBuildpackPackage{}, err
 	}
 
-	err := UpdateBuildpack(manifest.Language, file)
+	err = UpdateBuildpack(manifest.Language, file)
 	if err != nil {
-		return nil, err
+		return VersionedBuildpackPackage{}, err
 	}
 
-	return PackagedBuildpack{
+	return VersionedBuildpackPackage{
 		Version: buildpackVersion,
 		File:    file,
 	}, nil
@@ -78,8 +78,5 @@ func SeedRandom() {
 }
 
 func RemovePackagedBuildpack(buildpack VersionedBuildpackPackage) error {
-	err := os.Remove(buildpack.File)
-	if err != nil {
-		return err
-	}
+	return os.Remove(buildpack.File)
 }
