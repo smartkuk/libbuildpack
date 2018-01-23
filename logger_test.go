@@ -2,9 +2,9 @@ package libbuildpack_test
 
 import (
 	"bytes"
-	"os"
 
 	"github.com/cloudfoundry/libbuildpack"
+	env "github.com/cloudfoundry/libbuildpack/env"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 )
@@ -12,36 +12,21 @@ import (
 var _ = Describe("Logger", func() {
 
 	var (
-		err    error
-		logger *libbuildpack.Logger
-		buffer *bytes.Buffer
+		logger  *libbuildpack.Logger
+		buffer  *bytes.Buffer
+		mockEnv env.Env
 	)
 
 	BeforeEach(func() {
 		buffer = new(bytes.Buffer)
-		logger = libbuildpack.NewLogger(buffer)
+		mockEnv = env.Mock()
+		logger = libbuildpack.NewLogger(buffer, mockEnv)
 	})
 
 	Describe("Debug", func() {
-		var (
-			bpDebug    string
-			oldBpDebug string
-		)
-
-		JustBeforeEach(func() {
-			oldBpDebug = os.Getenv("BP_DEBUG")
-			err = os.Setenv("BP_DEBUG", bpDebug)
-			Expect(err).To(BeNil())
-		})
-
-		AfterEach(func() {
-			err = os.Setenv("BP_DEBUG", oldBpDebug)
-			Expect(err).To(BeNil())
-		})
-
 		Context("BP_DEBUG is set", func() {
 			BeforeEach(func() {
-				bpDebug = "true"
+				Expect(mockEnv.Set("BP_DEBUG", "true")).To(Succeed())
 			})
 
 			It("Logs the message", func() {
@@ -52,7 +37,7 @@ var _ = Describe("Logger", func() {
 
 		Context("BP_DEBUG is not set", func() {
 			BeforeEach(func() {
-				bpDebug = ""
+				Expect(mockEnv.Set("BP_DEBUG", "")).To(Succeed())
 			})
 
 			It("Does not log the message", func() {

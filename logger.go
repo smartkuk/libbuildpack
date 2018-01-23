@@ -3,12 +3,14 @@ package libbuildpack
 import (
 	"fmt"
 	"io"
-	"os"
 	"strings"
+
+	env "github.com/cloudfoundry/libbuildpack/env"
 )
 
 type Logger struct {
-	w io.Writer
+	w   io.Writer
+	env env.Env
 }
 
 const (
@@ -22,8 +24,8 @@ const (
 	msgDebug    = msgPrefix + bluePrefix + "DEBUG:" + colorSuffix
 )
 
-func NewLogger(w io.Writer) *Logger {
-	return &Logger{w: w}
+func NewLogger(w io.Writer, e env.Env) *Logger {
+	return &Logger{w: w, env: e}
 }
 
 func (l *Logger) Info(format string, args ...interface{}) {
@@ -39,7 +41,7 @@ func (l *Logger) Error(format string, args ...interface{}) {
 }
 
 func (l *Logger) Debug(format string, args ...interface{}) {
-	if os.Getenv("BP_DEBUG") != "" {
+	if l.env.Get("BP_DEBUG") != "" {
 		l.printWithHeader(msgDebug, format, args...)
 	}
 }

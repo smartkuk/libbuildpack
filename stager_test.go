@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/libbuildpack"
+	env "github.com/cloudfoundry/libbuildpack/env"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -26,9 +27,9 @@ var _ = Describe("Stager", func() {
 		logger      *libbuildpack.Logger
 		s           *libbuildpack.Stager
 		err         error
-		oldCfStack  string
 		buffer      *bytes.Buffer
 		manifestDir string
+		mockEnv     env.Env
 	)
 
 	BeforeEach(func() {
@@ -48,16 +49,18 @@ var _ = Describe("Stager", func() {
 		profileDir, err = ioutil.TempDir("", "profiled")
 		Expect(err).To(BeNil())
 
+		mockEnv = env.Mock()
+
 		manifestDir = filepath.Join("fixtures", "manifest", "standard")
 
-		manifest, err = libbuildpack.NewManifest(manifestDir, logger, time.Now())
+		manifest, err = libbuildpack.NewManifest(manifestDir, logger, time.Now(), mockEnv)
 		Expect(err).To(BeNil())
 
 		buffer = new(bytes.Buffer)
 
-		logger = libbuildpack.NewLogger(buffer)
+		logger = libbuildpack.NewLogger(buffer, mockEnv)
 
-		s = libbuildpack.NewStager([]string{buildDir, cacheDir, depsDir, depsIdx, profileDir}, logger, manifest)
+		s = libbuildpack.NewStager([]string{buildDir, cacheDir, depsDir, depsIdx, profileDir}, logger, manifest, mockEnv)
 	})
 
 	AfterEach(func() {
@@ -80,7 +83,7 @@ var _ = Describe("Stager", func() {
 		Context("A deps dir is provided", func() {
 			It("sets it in the Stager struct", func() {
 				args = []string{"buildDir", "cacheDir", "depsDir", "idx"}
-				s = libbuildpack.NewStager(args, logger, manifest)
+				s = libbuildpack.NewStager(args, logger, manifest, mockEnv)
 				Expect(err).To(BeNil())
 				Expect(s.BuildDir()).To(Equal("buildDir"))
 				Expect(s.CacheDir()).To(Equal("cacheDir"))
@@ -93,7 +96,7 @@ var _ = Describe("Stager", func() {
 		Context("A deps dir is not provided", func() {
 			It("sets DepsDir to the empty string", func() {
 				args = []string{"buildDir", "cacheDir"}
-				s = libbuildpack.NewStager(args, logger, manifest)
+				s = libbuildpack.NewStager(args, logger, manifest, mockEnv)
 				Expect(err).To(BeNil())
 				Expect(s.BuildDir()).To(Equal("buildDir"))
 				Expect(s.CacheDir()).To(Equal("cacheDir"))
@@ -106,7 +109,7 @@ var _ = Describe("Stager", func() {
 		Context("A profile.d dir is provided", func() {
 			It("sets ProfileDir", func() {
 				args = []string{"buildDir", "cacheDir", "depsDir", "idx", "rootProfileD"}
-				s = libbuildpack.NewStager(args, logger, manifest)
+				s = libbuildpack.NewStager(args, logger, manifest, mockEnv)
 				Expect(err).To(BeNil())
 				Expect(s.ProfileDir()).To(Equal("rootProfileD"))
 			})
@@ -137,9 +140,7 @@ var _ = Describe("Stager", func() {
 
 	Describe("CheckBuildpackValid", func() {
 		BeforeEach(func() {
-			oldCfStack = os.Getenv("CF_STACK")
-			err = os.Setenv("CF_STACK", "cflinuxfs2")
-			Expect(err).To(BeNil())
+			Expect(mockEnv.Set("CF_STACK", "cflinuxfs2")).To(Succeed())
 		})
 
 		Context("buildpack is valid", func() {
@@ -419,21 +420,9 @@ var _ = Describe("Stager", func() {
 		})
 
 		Describe("SetStagingEnvironment", func() {
-			var envVars = map[string]string{}
-
 			BeforeEach(func() {
-				vars := []string{"PATH", "LD_LIBRARY_PATH", "LIBRARY_PATH", "INCLUDE_PATH", "CPATH", "CPPPATH", "PKG_CONFIG_PATH", "ENV_VAR"}
-
-				for _, envVar := range vars {
-					envVars[envVar] = os.Getenv(envVar)
-					os.Setenv(envVar, "existing_"+envVar)
-				}
-			})
-
-			AfterEach(func() {
-				for key, val := range envVars {
-					err = os.Setenv(key, val)
-					Expect(err).To(BeNil())
+				for _, key := range []string{"PATH", "LD_LIBRARY_PATH", "LIBRARY_PATH", "INCLUDE_PATH", "CPATH", "CPPPATH", "PKG_CONFIG_PATH", "ENV_VAR"} {
+					mockEnv.Set(key, "existing_"+key)
 				}
 			})
 
@@ -441,7 +430,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("PATH")
+				newPath := mockEnv.Get("PATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/01/bin:%s/00/bin:existing_PATH", depsDir, depsDir)))
 			})
 
@@ -449,7 +438,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("LD_LIBRARY_PATH")
+				newPath := mockEnv.Get("LD_LIBRARY_PATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/02/lib:%s/01/lib:existing_LD_LIBRARY_PATH", depsDir, depsDir)))
 			})
 
@@ -457,7 +446,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("LIBRARY_PATH")
+				newPath := mockEnv.Get("LIBRARY_PATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/02/lib:%s/01/lib:existing_LIBRARY_PATH", depsDir, depsDir)))
 			})
 
@@ -465,7 +454,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("INCLUDE_PATH")
+				newPath := mockEnv.Get("INCLUDE_PATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include:existing_INCLUDE_PATH", depsDir)))
 			})
 
@@ -473,7 +462,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("CPATH")
+				newPath := mockEnv.Get("CPATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include:existing_CPATH", depsDir)))
 			})
 
@@ -481,7 +470,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("CPPPATH")
+				newPath := mockEnv.Get("CPPPATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include:existing_CPPPATH", depsDir)))
 			})
 
@@ -489,7 +478,7 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("PKG_CONFIG_PATH")
+				newPath := mockEnv.Get("PKG_CONFIG_PATH")
 				Expect(newPath).To(Equal(fmt.Sprintf("%s/04/pkgconfig:existing_PKG_CONFIG_PATH", depsDir)))
 			})
 
@@ -497,21 +486,21 @@ var _ = Describe("Stager", func() {
 				err = s.SetStagingEnvironment()
 				Expect(err).To(BeNil())
 
-				newPath := os.Getenv("ENV_VAR")
+				newPath := mockEnv.Get("ENV_VAR")
 				Expect(newPath).To(Equal("value"))
 			})
 
 			Context("relevant env variable is empty", func() {
 				BeforeEach(func() {
-					for key, _ := range envVars {
-						os.Setenv(key, "")
+					for _, key := range []string{"PATH", "LD_LIBRARY_PATH", "LIBRARY_PATH", "INCLUDE_PATH", "CPATH", "CPPPATH", "PKG_CONFIG_PATH", "ENV_VAR"} {
+						mockEnv.Set(key, "")
 					}
 				})
 				It("sets PATH based on the supplied deps", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("PATH")
+					newPath := mockEnv.Get("PATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/01/bin:%s/00/bin", depsDir, depsDir)))
 				})
 
@@ -519,7 +508,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("LD_LIBRARY_PATH")
+					newPath := mockEnv.Get("LD_LIBRARY_PATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/02/lib:%s/01/lib", depsDir, depsDir)))
 				})
 
@@ -527,7 +516,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("LIBRARY_PATH")
+					newPath := mockEnv.Get("LIBRARY_PATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/02/lib:%s/01/lib", depsDir, depsDir)))
 				})
 
@@ -535,7 +524,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("INCLUDE_PATH")
+					newPath := mockEnv.Get("INCLUDE_PATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include", depsDir)))
 				})
 
@@ -543,7 +532,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("CPATH")
+					newPath := mockEnv.Get("CPATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include", depsDir)))
 				})
 
@@ -551,7 +540,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("CPPPATH")
+					newPath := mockEnv.Get("CPPPATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/03/include", depsDir)))
 				})
 
@@ -559,7 +548,7 @@ var _ = Describe("Stager", func() {
 					err = s.SetStagingEnvironment()
 					Expect(err).To(BeNil())
 
-					newPath := os.Getenv("PKG_CONFIG_PATH")
+					newPath := mockEnv.Get("PKG_CONFIG_PATH")
 					Expect(newPath).To(Equal(fmt.Sprintf("%s/04/pkgconfig", depsDir)))
 				})
 			})
@@ -594,5 +583,4 @@ var _ = Describe("Stager", func() {
 			})
 		})
 	})
-
 })

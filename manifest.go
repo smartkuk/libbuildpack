@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	env "github.com/cloudfoundry/libbuildpack/env"
 )
 
 const dateFormat = "2006-01-02"
@@ -43,6 +44,7 @@ type Manifest struct {
 	manifestRootDir string
 	currentTime     time.Time
 	log             *Logger
+	env             env.Env
 }
 
 type BuildpackMetadata struct {
@@ -50,7 +52,7 @@ type BuildpackMetadata struct {
 	Version  string `yaml:"version"`
 }
 
-func NewManifest(bpDir string, logger *Logger, currentTime time.Time) (*Manifest, error) {
+func NewManifest(bpDir string, logger *Logger, currentTime time.Time, envObj env.Env) (*Manifest, error) {
 	var m Manifest
 	y := &YAML{}
 
@@ -66,6 +68,7 @@ func NewManifest(bpDir string, logger *Logger, currentTime time.Time) (*Manifest
 
 	m.currentTime = currentTime
 	m.log = logger
+	m.env = envObj
 
 	return &m, nil
 }
@@ -179,7 +182,7 @@ func (m *Manifest) Version() (string, error) {
 }
 
 func (m *Manifest) CheckStackSupport() error {
-	requiredStack := os.Getenv("CF_STACK")
+	requiredStack := m.env.Get("CF_STACK")
 
 	if len(m.ManifestEntries) == 0 {
 		return nil
@@ -376,7 +379,7 @@ func (m *Manifest) FetchDependency(dep Dependency, outputFile string) error {
 }
 
 func (m *Manifest) entrySupportsCurrentStack(entry *ManifestEntry) bool {
-	stack := os.Getenv("CF_STACK")
+	stack := m.env.Get("CF_STACK")
 	if stack == "" {
 		return true
 	}

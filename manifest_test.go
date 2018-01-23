@@ -10,6 +10,7 @@ import (
 
 	"github.com/cloudfoundry/libbuildpack"
 	"github.com/cloudfoundry/libbuildpack/ansicleaner"
+	env "github.com/cloudfoundry/libbuildpack/env"
 	httpmock "gopkg.in/jarcoal/httpmock.v1"
 
 	. "github.com/onsi/ginkgo"
@@ -18,7 +19,6 @@ import (
 
 var _ = Describe("Manifest", func() {
 	var (
-		oldCfStack  string
 		manifest    *libbuildpack.Manifest
 		manifestDir string
 		err         error
@@ -26,23 +26,23 @@ var _ = Describe("Manifest", func() {
 		currentTime time.Time
 		buffer      *bytes.Buffer
 		logger      *libbuildpack.Logger
+		mockEnv     env.Env
 	)
 
 	BeforeEach(func() {
-		oldCfStack = os.Getenv("CF_STACK")
-		os.Setenv("CF_STACK", "cflinuxfs2")
+		mockEnv = env.Mock()
+		mockEnv.Set("CF_STACK", "cflinuxfs2")
 
 		manifestDir = "fixtures/manifest/standard"
 		currentTime = time.Now()
 		httpmock.Reset()
 
 		buffer = new(bytes.Buffer)
-		logger = libbuildpack.NewLogger(ansicleaner.New(buffer))
+		logger = libbuildpack.NewLogger(ansicleaner.New(buffer), mockEnv)
 	})
-	AfterEach(func() { err = os.Setenv("CF_STACK", oldCfStack); Expect(err).To(BeNil()) })
 
 	JustBeforeEach(func() {
-		manifest, err = libbuildpack.NewManifest(manifestDir, logger, currentTime)
+		manifest, err = libbuildpack.NewManifest(manifestDir, logger, currentTime, mockEnv)
 		Expect(err).To(BeNil())
 	})
 
@@ -118,8 +118,7 @@ ruby:
 		Context("Stack is supported", func() {
 			BeforeEach(func() {
 				manifestDir = "fixtures/manifest/stacks"
-				err = os.Setenv("CF_STACK", "cflinuxfs2")
-				Expect(err).To(BeNil())
+				Expect(mockEnv.Set("CF_STACK", "cflinuxfs2")).To(Succeed())
 			})
 
 			It("returns nil", func() {
@@ -138,8 +137,7 @@ ruby:
 			Context("by a single dependency", func() {
 				BeforeEach(func() {
 					manifestDir = "fixtures/manifest/stacks"
-					err = os.Setenv("CF_STACK", "xenial")
-					Expect(err).To(BeNil())
+					Expect(mockEnv.Set("CF_STACK", "xenial")).To(Succeed())
 				})
 				It("returns nil", func() {
 					Expect(manifest.CheckStackSupport()).To(Succeed())
@@ -149,11 +147,10 @@ ruby:
 
 		Context("Stack is not supported", func() {
 			BeforeEach(func() {
-				err = os.Setenv("CF_STACK", "notastack")
-				Expect(err).To(BeNil())
+				Expect(mockEnv.Set("CF_STACK", "notastack")).To(Succeed())
 			})
 
-			It("returns nil", func() {
+			It("returns an error", func() {
 				Expect(manifest.CheckStackSupport()).To(MatchError(errors.New("required stack notastack was not found")))
 			})
 		})
@@ -193,7 +190,7 @@ ruby:
 		Context("CF_STACK = xenial", func() {
 			BeforeEach(func() {
 				manifestDir = "fixtures/manifest/stacks"
-				os.Setenv("CF_STACK", "xenial")
+				mockEnv.Set("CF_STACK", "xenial")
 			})
 			It("limits to dependencies matching CF_STACK", func() {
 				versions := manifest.AllDependencyVersions("thing")
@@ -204,7 +201,7 @@ ruby:
 		Context("CF_STACK = cflinuxfs2", func() {
 			BeforeEach(func() {
 				manifestDir = "fixtures/manifest/stacks"
-				os.Setenv("CF_STACK", "cflinuxfs2")
+				mockEnv.Set("CF_STACK", "cflinuxfs2")
 			})
 			It("limits to dependencies matching CF_STACK", func() {
 				versions := manifest.AllDependencyVersions("thing")
@@ -215,7 +212,7 @@ ruby:
 		Context("CF_STACK = empty string", func() {
 			BeforeEach(func() {
 				manifestDir = "fixtures/manifest/stacks"
-				os.Setenv("CF_STACK", "cflinuxfs2")
+				mockEnv.Set("CF_STACK", "cflinuxfs2")
 			})
 			It("lists all dependencies matching name", func() {
 				versions := manifest.AllDependencyVersions("thing")

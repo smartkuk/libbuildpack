@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	env "github.com/cloudfoundry/libbuildpack/env"
 )
 
 type Stager struct {
@@ -17,9 +19,10 @@ type Stager struct {
 	profileDir string
 	manifest   *Manifest
 	log        *Logger
+	env        env.Env
 }
 
-func NewStager(args []string, logger *Logger, manifest *Manifest) *Stager {
+func NewStager(args []string, logger *Logger, manifest *Manifest, envObj env.Env) *Stager {
 	buildDir := args[0]
 	cacheDir := args[1]
 	depsDir := ""
@@ -43,6 +46,7 @@ func NewStager(args []string, logger *Logger, manifest *Manifest) *Stager {
 		profileDir: profileDir,
 		manifest:   manifest,
 		log:        logger,
+		env:        envObj,
 	}
 
 	return s
@@ -230,7 +234,7 @@ var launchEnvVarDirs = map[string]string{
 
 func (s *Stager) SetStagingEnvironment() error {
 	for envVar, dir := range stagingEnvVarDirs {
-		oldVal := os.Getenv(envVar)
+		oldVal := s.env.Get(envVar)
 
 		depsPaths, err := existingDepsDirs(s.depsDir, dir, s.depsDir)
 		if err != nil {
@@ -241,7 +245,7 @@ func (s *Stager) SetStagingEnvironment() error {
 			if len(oldVal) > 0 {
 				depsPaths = append(depsPaths, oldVal)
 			}
-			os.Setenv(envVar, strings.Join(depsPaths, ":"))
+			s.env.Set(envVar, strings.Join(depsPaths, ":"))
 		}
 	}
 
@@ -263,7 +267,7 @@ func (s *Stager) SetStagingEnvironment() error {
 					return err
 				}
 
-				if err := os.Setenv(file.Name(), string(val)); err != nil {
+				if err := s.env.Set(file.Name(), string(val)); err != nil {
 					return err
 				}
 			}
