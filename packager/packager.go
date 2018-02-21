@@ -99,6 +99,10 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 	if err := t.Execute(f, nil); err != nil {
 		return err
 	}
+
+	// get the shasum of f.
+	// write the shasum "f: shasum" into sha.yml (or into a struct we'll put into sha)
+
 	f.Close()
 	// END NON-AUTO-GENERATED CODE
 

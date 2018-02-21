@@ -54,9 +54,7 @@ var _ = Describe("Packager", func() {
 
 		checkfileexists := func(path string) func() {
 			return func() {
-				exists, err := libbuildpack.FileExists(filepath.Join(baseDir, path))
-				Expect(err).To(BeNil())
-				Expect(exists).To(Equal(true))
+				Expect(libbuildpack.FileExists(filepath.Join(baseDir, path))).To(BeTrue())
 			}
 		}
 
