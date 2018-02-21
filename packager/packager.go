@@ -98,6 +98,10 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 	if err := t.Execute(f, nil); err != nil {
 		return err
 	}
+
+	// get the shasum of f.
+	// write the shasum "f: shasum" into sha.yml (or into a struct we'll put into sha)
+
 	f.Close()
 	// END NON-AUTO-GENERATED CODE
 
@@ -150,6 +154,7 @@ func Scaffold(bpDir string, languageName string) error {
 	cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	fmt.Printf("bpDir: %s\n", bpDir)
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
 	cmd.Dir = bpDir
 	if err := cmd.Run(); err != nil {
