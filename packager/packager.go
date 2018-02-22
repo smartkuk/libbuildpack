@@ -56,6 +56,7 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 	var manifest struct {
 		Language string `yaml:"language"`
 	}
+
 	if err := libbuildpack.NewYAML().Load(filepath.Join(bpDir, "manifest.yml"), &manifest); err != nil {
 		return "", err
 	}
@@ -75,9 +76,11 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 // RestoreAsset restores an asset under the given directory
 func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 	data, err := Asset(name)
+
 	if err != nil {
 		return err
 	}
+
 	info, err := AssetInfo(name)
 	if err != nil {
 		return err
@@ -100,9 +103,6 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 		return err
 	}
 
-	// get the shasum of f.
-	// write the shasum "f: shasum" into sha.yml (or into a struct we'll put into sha)
-
 	f.Close()
 	// END NON-AUTO-GENERATED CODE
 
@@ -110,19 +110,33 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 	if err != nil {
 		return err
 	}
+
 	return nil
 }
 
 // RestoreAssets restores an asset under the given directory recursively
-func OurRestoreAssets(dir, name string, funcMap template.FuncMap) error {
+func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[string]string) error {
+	//TODO: is passing in the shas map the best way to go about this?
 	children, err := AssetDir(name)
 	// File
 	if err != nil {
-		return OurRestoreAsset(dir, name, funcMap)
+		err = OurRestoreAsset(dir, name, funcMap)
+		if err != nil {
+			return err
+		}
+		content, err := ioutil.ReadFile(_filePath(dir, name))
+		if err != nil {
+			return err
+		}
+		sum := sha256.Sum256(content)
+
+		actualSha256 := hex.EncodeToString(sum[:])
+		shas[name] = actualSha256
+		return nil
 	}
 	// Dir
 	for _, child := range children {
-		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap)
+		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap, shas)
 		if err != nil {
 			return err
 		}
@@ -142,9 +156,17 @@ func Scaffold(bpDir string, languageName string) error {
 	}
 
 	fmt.Fprintln(Stdout, "Creating directory and files")
-	if err := OurRestoreAssets(bpDir, "", funcMap); err != nil {
+	var shas = map[string]string{}
+	if err := OurRestoreAssets(bpDir, "", funcMap, shas); err != nil {
 		return err
 	}
+	type sha struct {
+		Sha map[string]string `yaml:"sha"`
+	}
+
+	libbuildpack.NewYAML().Write(filepath.Join(bpDir, "sha.yml"), sha{
+		Sha: shas,
+	})
 
 	if err := os.Rename(filepath.Join(bpDir, "src", "LANGUAGE"), filepath.Join(bpDir, "src", languageName)); err != nil {
 		return err

@@ -138,6 +138,56 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 	return subcommands.ExitSuccess
 }
 
+type upgradeCmd struct {
+	name string
+	dir  string
+}
+
+func (*upgradeCmd) Name() string { return "upgrade" }
+func (*upgradeCmd) Synopsis() string {
+	return "Upgrades a buildpack scaffolded by buildpack-packager init"
+}
+func (u *upgradeCmd) SetFlags(f *flag.FlagSet) {
+	f.StringVar(&u.name, "name", "", "Name of the buildpack. Required.")
+	f.StringVar(&u.dir, "path", "", "Path to folder to create. Defaults to the name + '-buildpack' in the current directory.")
+}
+func (*upgradeCmd) Usage() string {
+	return `upgrade:
+	Update an existing buildpack with changes made to scaffolding code.
+`
+}
+func (u *upgradeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+	if u.name == "" {
+		log.Printf("error: no name entered for new buildpack")
+		return subcommands.ExitUsageError
+	}
+
+	// assume user doesn't want -buildpack in the language name
+	i.name = strings.TrimSuffix(i.name, "-buildpack")
+
+	if u.dir == "" {
+		absoluteDefaultDir, err := filepath.Abs(u.name + "-buildpack")
+		if err != nil {
+			log.Printf("error: couldn't get absolute path to default directory: %v", err)
+			return subcommands.ExitFailure
+		}
+		u.dir = absoluteDefaultDir
+	}
+
+	if exists, err := libbuildpack.FileExists(i.dir); err != nil {
+		return subcommands.ExitFailure
+	} else if !exists {
+		log.Printf("error: directory %s does not exist", u.name)
+		return subcommands.ExitUsageError
+	}
+
+	if err := packager.Upgrade(i.dir, i.name); err != nil {
+		log.Printf("Error upgrading buildpack: %v", err)
+		return subcommands.ExitFailure
+	}
+
+	return subcommands.ExitSuccess
+}
 func main() {
 	subcommands.Register(subcommands.HelpCommand(), "")
 	subcommands.Register(subcommands.FlagsCommand(), "")
@@ -145,6 +195,7 @@ func main() {
 	subcommands.Register(&summaryCmd{}, "Custom")
 	subcommands.Register(&buildCmd{}, "Custom")
 	subcommands.Register(&initCmd{}, "Custom")
+	subcommands.Register(&upgradeCmd{}, "Custom")
 
 	flag.Parse()
 	ctx := context.Background()
