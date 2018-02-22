@@ -127,8 +127,11 @@ func OurRestoreAssets(dir, name string, funcMap template.FuncMap) error {
 }
 
 // END AUTO-GENERATED CODE (from bindata.go)
+type Command interface {
+	Run(cmd *exec.Cmd) error
+}
 
-func Scaffold(bpDir string, languageName string) error {
+func Scaffold(bpDir string, languageName string, command Command) error {
 	language := func() string {
 		return languageName
 	}
@@ -153,7 +156,7 @@ func Scaffold(bpDir string, languageName string) error {
 	cmd.Stderr = Stderr
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
 	cmd.Dir = bpDir
-	if err := cmd.Run(); err != nil {
+	if err := command.Run(cmd); err != nil {
 		return err
 	}
 	if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
@@ -165,7 +168,7 @@ func Scaffold(bpDir string, languageName string) error {
 	cmd.Stderr = Stderr
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
 	cmd.Dir = filepath.Join(bpDir, "src", languageName)
-	if err := cmd.Run(); err != nil {
+	if err := command.Run(cmd); err != nil {
 		return err
 	}
 

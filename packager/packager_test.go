@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -37,13 +38,27 @@ var _ = Describe("Packager", func() {
 
 	Describe("Scaffold", func() {
 		var baseDir string
+		var commandsRun []string
 		BeforeEach(func() {
 			var err error
 			baseDir, err = ioutil.TempDir("", "scaffold-basedir")
 			Expect(err).To(BeNil())
 
+			commandsRun = []string{}
+			mockCommand := &mockCommand{func(cmd *exec.Cmd) error {
+				commandsRun = append(commandsRun, strings.Join(cmd.Args, " "))
+				if false {
+					return cmd.Run()
+				} else {
+					if strings.Join(cmd.Args, " ") == "go get -u github.com/golang/dep/cmd/dep" {
+						Expect(os.MkdirAll(filepath.Join(cmd.Dir, "src/github.com/golang/dep/cmd/dep"), 0755)).To(Succeed())
+					}
+					return nil
+				}
+			}}
+
 			// run the code under test
-			err = packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage")
+			err = packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage", mockCommand)
 			Expect(err).To(BeNil())
 		})
 		AfterEach(func() {
@@ -59,6 +74,13 @@ var _ = Describe("Packager", func() {
 		}
 
 		It("Creates all of the files", func() {
+			By("running dep ensure", func() {
+				Expect(commandsRun).To(Equal([]string{
+					"go get -u github.com/golang/dep/cmd/dep",
+					filepath.Join(baseDir, "bpdir/.bin/dep") + " ensure",
+				}))
+			})
+
 			// top-level directories
 			By("creates a named directory", checkfileexists("bpdir"))
 			By("creates a bin directory", checkfileexists("bpdir/bin"))
@@ -244,3 +266,14 @@ var _ = Describe("Packager", func() {
 		})
 	})
 })
+
+type mockCommand struct {
+	MockRun func(cmd *exec.Cmd) error
+}
+
+func (c *mockCommand) Run(cmd *exec.Cmd) error {
+	if c.MockRun != nil {
+		return c.MockRun(cmd)
+	}
+	return nil
+}
