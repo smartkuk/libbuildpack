@@ -114,7 +114,7 @@ var _ = Describe("Packager", func() {
 		})
 	})
 
-	Describe("Upgrade", func() {
+	FDescribe("Upgrade", func() {
 		var baseDir string
 		BeforeEach(func() {
 			var err error
@@ -124,12 +124,19 @@ var _ = Describe("Packager", func() {
 			Expect(libbuildpack.CopyDirectory("fixtures/modified", baseDir)).To(Succeed())
 
 			// run the code under test
-			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage")).To(Succeed())
+			Expect(packager.Upgrade(filepath.Join(baseDir, "modified"))).To(Succeed())
 		})
 		AfterEach(func() {
 			os.RemoveAll(baseDir)
 		})
 
+		It("updates unmodified old files", func() {
+			Expect(true).To(BeFalse())
+		})
+
+		It("leaves modified files unchanged and warns", func() {
+			Expect(true).To(BeFalse())
+		})
 	})
 
 	Describe("Package", func() {
