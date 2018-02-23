@@ -124,18 +124,30 @@ var _ = Describe("Packager", func() {
 			Expect(libbuildpack.CopyDirectory("fixtures/modified", baseDir)).To(Succeed())
 
 			// run the code under test
-			Expect(packager.Upgrade(filepath.Join(baseDir, "modified"))).To(Succeed())
+			Expect(packager.Upgrade(baseDir)).To(Succeed())
 		})
 		AfterEach(func() {
 			os.RemoveAll(baseDir)
 		})
 
-		It("updates unmodified old files", func() {
-			Expect(true).To(BeFalse())
+		It("updates files user has NOT modified", func() {
+			file := "src/mylanguage/supply/supply_test.go"
+			current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+			Expect(err).ToNot(HaveOccurred())
+			previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(string(current)).ToNot(Equal(string(previous)))
 		})
 
-		It("leaves modified files unchanged and warns", func() {
-			Expect(true).To(BeFalse())
+		It("leaves files user HAS modified", func() {
+			file := "src/mylanguage/supply/supply.go"
+			current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+			Expect(err).ToNot(HaveOccurred())
+			previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(string(current)).To(Equal(string(previous)))
 		})
 	})
 

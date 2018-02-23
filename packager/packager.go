@@ -18,6 +18,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"text/template"
 
 	"github.com/cloudfoundry/libbuildpack"
@@ -74,6 +75,11 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 	return filepath.Join(dir, zipFile), nil
 }
 
+func checksumHex(b []byte) string {
+	sum := sha256.Sum256(b)
+	return hex.EncodeToString(sum[:])
+}
+
 // START AUTO-GENERATED CODE (from bindata.go)
 // RestoreAsset restores an asset under the given directory
 // TODO: maybe make scaffold into a struct and split up packager and scaffold if they don't share anything
@@ -88,11 +94,6 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string
 	if err != nil {
 		return err
 	}
-	err = os.MkdirAll(_filePath(dir, filepath.Dir(name)), os.FileMode(0755))
-	if err != nil {
-		return err
-	}
-
 	// START NON-AUTO-GENERATED CODE
 	t, err := template.New("").Funcs(funcMap).Parse(string(data))
 	if err != nil {
@@ -107,9 +108,32 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string
 		return err
 	}
 
-	sum := sha256.Sum256(b.Bytes())
-	actualSha256 := hex.EncodeToString(sum[:])
-	shas[name] = actualSha256
+	if strings.HasPrefix(name, "src/LANGUAGE/") {
+		langName, ok := funcMap["LANGUAGE"].(func() string)
+		if !ok {
+			return fmt.Errorf("Could not find language from funcmap")
+		}
+		name = strings.Replace(name, "src/LANGUAGE/", fmt.Sprintf("src/%s/", langName()), 1)
+	}
+
+	oldSha256 := ""
+	if oldContents, err := ioutil.ReadFile(_filePath(dir, name)); err == nil {
+		oldSha256 = checksumHex(oldContents)
+	}
+
+	if name == "bin/supply" {
+		fmt.Println(name, oldSha256, shas[name])
+	}
+	if shas[name] != "" && shas[name] != oldSha256 {
+		fmt.Fprintf(Stdout, "***Ignoring %s becuase it has been modified***\n", name)
+		return nil
+	}
+	shas[name] = checksumHex(b.Bytes())
+
+	err = os.MkdirAll(_filePath(dir, filepath.Dir(name)), os.FileMode(0755))
+	if err != nil {
+		return err
+	}
 
 	if err := ioutil.WriteFile(_filePath(dir, name), b.Bytes(), info.Mode()); err != nil {
 		return err
@@ -157,53 +181,94 @@ func Scaffold(bpDir string, languageName string) error {
 		"LANGUAGE": language,
 	}
 
-	fmt.Fprintln(Stdout, "Creating directory and files")
-	var shas = map[string]string{}
-	if err := OurRestoreAssets(bpDir, "", funcMap, shas); err != nil {
-		return err
-	}
 	type sha struct {
 		Sha map[string]string `yaml:"sha"`
 	}
+	var shas = map[string]string{}
+	if found, err := libbuildpack.FileExists(filepath.Join(bpDir, "sha.yml")); err != nil {
+		return err
+	} else if found {
+		shas, err = readShaYML(bpDir)
+		if err != nil {
+			return err
+		}
+	}
 
-	fmt.Fprintln(Stdout, shas)
+	fmt.Fprintln(Stdout, "Creating directory and files")
+	if err := OurRestoreAssets(bpDir, "", funcMap, shas); err != nil {
+		return err
+	}
+
 	libbuildpack.NewYAML().Write(filepath.Join(bpDir, "sha.yml"), sha{
 		Sha: shas,
 	})
 
-	if err := os.Rename(filepath.Join(bpDir, "src", "LANGUAGE"), filepath.Join(bpDir, "src", languageName)); err != nil {
-		return err
-	}
-
-	// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
-	fmt.Fprintln(Stdout, "Installing dep")
-	cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
-	cmd.Stdout = Stdout
-	cmd.Stderr = Stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
-	cmd.Dir = bpDir
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
-	}
-	if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
-		return err
-	}
-	fmt.Fprintln(Stdout, "Running dep ensure")
-	cmd = exec.Command(filepath.Join(bpDir, ".bin", "dep"), "ensure")
-	cmd.Stdout = Stdout
-	cmd.Stderr = Stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
-	cmd.Dir = filepath.Join(bpDir, "src", languageName)
-	if err := cmd.Run(); err != nil {
-		fmt.Printf("GOPATH=%s\n", bpDir)
-		return fmt.Errorf("dep ensure: %s", err)
+	if false {
+		// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
+		fmt.Fprintln(Stdout, "Installing dep")
+		cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
+		cmd.Stdout = Stdout
+		cmd.Stderr = Stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
+		cmd.Dir = bpDir
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
+		}
+		// TODO delete or uncommment
+		// if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
+		// 	return err
+		// }
+		fmt.Fprintln(Stdout, "Running dep ensure")
+		cmd = exec.Command(filepath.Join(bpDir, ".bin", "dep"), "ensure")
+		cmd.Stdout = Stdout
+		cmd.Stderr = Stderr
+		cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
+		cmd.Dir = filepath.Join(bpDir, "src", languageName)
+		if err := cmd.Run(); err != nil {
+			fmt.Printf("GOPATH=%s\n", bpDir)
+			return fmt.Errorf("dep ensure: %s", err)
+		}
 	}
 
 	return nil
 }
 
 func Upgrade(bpDir string) error {
-	return nil
+	manifest, err := readManifest(bpDir)
+	if err != nil {
+		return fmt.Errorf("error opening manifest: %s", err)
+	}
+
+	return Scaffold(bpDir, manifest.Language)
+}
+
+func readShaYML(bpDir string) (map[string]string, error) {
+	type sha struct {
+		Sha map[string]string `yaml:"sha"`
+	}
+	shas := &sha{}
+	data, err := ioutil.ReadFile(filepath.Join(bpDir, "sha.yml"))
+	if err != nil {
+		return map[string]string{}, err
+	}
+	if err := yaml.Unmarshal(data, shas); err != nil {
+		return map[string]string{}, err
+	}
+
+	return shas.Sha, nil
+}
+
+func readManifest(bpDir string) (*Manifest, error) {
+	manifest := &Manifest{}
+	data, err := ioutil.ReadFile(filepath.Join(bpDir, "manifest.yml"))
+	if err != nil {
+		return nil, err
+	}
+	if err := yaml.Unmarshal(data, manifest); err != nil {
+		return nil, err
+	}
+
+	return manifest, nil
 }
 
 func Package(bpDir, cacheDir, version string, cached bool) (string, error) {
@@ -221,12 +286,8 @@ func Package(bpDir, cacheDir, version string, cached bool) (string, error) {
 		return "", err
 	}
 
-	manifest := Manifest{}
-	data, err := ioutil.ReadFile(filepath.Join(dir, "manifest.yml"))
+	manifest, err := readManifest(dir)
 	if err != nil {
-		return "", err
-	}
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
 		return "", err
 	}
 
