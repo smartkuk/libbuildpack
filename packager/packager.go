@@ -4,6 +4,8 @@ package packager
 
 import (
 	"archive/zip"
+	"bufio"
+	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
@@ -74,7 +76,8 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 
 // START AUTO-GENERATED CODE (from bindata.go)
 // RestoreAsset restores an asset under the given directory
-func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
+// TODO: maybe make scaffold into a struct and split up packager and scaffold if they don't share anything
+func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string]string) error {
 	data, err := Asset(name)
 
 	if err != nil {
@@ -95,15 +98,19 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
 	if err != nil {
 		return err
 	}
-	f, err := os.OpenFile(_filePath(dir, name), os.O_RDWR|os.O_CREATE, info.Mode())
-	if err != nil {
-		return err
-	}
+	var b bytes.Buffer
+	f := bufio.NewWriter(&b)
 	if err := t.Execute(f, nil); err != nil {
 		return err
 	}
 
-	f.Close()
+	sum := sha256.Sum256(b.Bytes())
+	actualSha256 := hex.EncodeToString(sum[:])
+	shas[name] = actualSha256
+
+	if err := ioutil.WriteFile(_filePath(dir, name), b.Bytes(), info.Mode()); err != nil {
+		return err
+	}
 	// END NON-AUTO-GENERATED CODE
 
 	err = os.Chtimes(_filePath(dir, name), info.ModTime(), info.ModTime())
@@ -120,20 +127,12 @@ func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[strin
 	children, err := AssetDir(name)
 	// File
 	if err != nil {
-		err = OurRestoreAsset(dir, name, funcMap)
+		err = OurRestoreAsset(dir, name, funcMap, shas)
 		if err != nil {
 			return err
 		}
-		content, err := ioutil.ReadFile(_filePath(dir, name))
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(content)
-
-		actualSha256 := hex.EncodeToString(sum[:])
-		shas[name] = actualSha256
-		return nil
 	}
+
 	// Dir
 	for _, child := range children {
 		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap, shas)
@@ -164,6 +163,7 @@ func Scaffold(bpDir string, languageName string) error {
 		Sha map[string]string `yaml:"sha"`
 	}
 
+	fmt.Println(shas)
 	libbuildpack.NewYAML().Write(filepath.Join(bpDir, "sha.yml"), sha{
 		Sha: shas,
 	})
