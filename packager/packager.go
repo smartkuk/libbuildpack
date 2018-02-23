@@ -103,6 +103,9 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string
 	if err := t.Execute(f, nil); err != nil {
 		return err
 	}
+	if err := f.Flush(); err != nil {
+		return err
+	}
 
 	sum := sha256.Sum256(b.Bytes())
 	actualSha256 := hex.EncodeToString(sum[:])
@@ -163,7 +166,7 @@ func Scaffold(bpDir string, languageName string) error {
 		Sha map[string]string `yaml:"sha"`
 	}
 
-	fmt.Println(shas)
+	fmt.Fprintln(Stdout, shas)
 	libbuildpack.NewYAML().Write(filepath.Join(bpDir, "sha.yml"), sha{
 		Sha: shas,
 	})
