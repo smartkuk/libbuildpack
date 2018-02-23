@@ -183,7 +183,7 @@ func Scaffold(bpDir string, languageName string) error {
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
 	cmd.Dir = bpDir
 	if err := cmd.Run(); err != nil {
-		return err
+		return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
 	}
 	if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
 		return err
@@ -195,9 +195,14 @@ func Scaffold(bpDir string, languageName string) error {
 	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
 	cmd.Dir = filepath.Join(bpDir, "src", languageName)
 	if err := cmd.Run(); err != nil {
-		return err
+		fmt.Printf("GOPATH=%s\n", bpDir)
+		return fmt.Errorf("dep ensure: %s", err)
 	}
 
+	return nil
+}
+
+func Upgrade(bpDir string) error {
 	return nil
 }
 

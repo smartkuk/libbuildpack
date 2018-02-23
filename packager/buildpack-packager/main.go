@@ -97,7 +97,7 @@ func (*initCmd) Synopsis() string {
 	return "Creates a folder with the basic structure of a new buildpack"
 }
 func (i *initCmd) SetFlags(f *flag.FlagSet) {
-	f.StringVar(&i.name, "name", "", "Name of the buildpack. Required.")
+	f.StringVar(&i.name, "name", "", "Name of the buildpack. Required.") // TODO convert to positional argument
 	f.StringVar(&i.dir, "path", "", "Path to folder to create. Defaults to the name + '-buildpack' in the current directory.")
 }
 func (*initCmd) Usage() string {
@@ -106,6 +106,8 @@ func (*initCmd) Usage() string {
 `
 }
 func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+	fmt.Println("Init", i.name, i.dir)
+
 	if i.name == "" {
 		log.Printf("error: no name entered for new buildpack")
 		return subcommands.ExitUsageError
@@ -115,18 +117,20 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 	i.name = strings.TrimSuffix(i.name, "-buildpack")
 
 	if i.dir == "" {
-		absoluteDefaultDir, err := filepath.Abs(i.name + "-buildpack")
-		if err != nil {
-			log.Printf("error: couldn't get absolute path to default directory: %v", err)
-			return subcommands.ExitFailure
-		}
-		i.dir = absoluteDefaultDir
+		i.dir = i.name + "-buildpack"
+	}
+	var err error
+	i.dir, err = filepath.Abs(i.dir)
+	if err != nil {
+		log.Printf("error: couldn't get absolute path to default directory: %v", err)
+		return subcommands.ExitFailure
 	}
 
+	// TODO special case "." to ignore that it exists
 	if exists, err := libbuildpack.FileExists(i.dir); err != nil {
 		return subcommands.ExitFailure
 	} else if exists {
-		log.Printf("error: directory %s already exists", i.name)
+		log.Printf("error: directory %s already exists", i.dir)
 		return subcommands.ExitUsageError
 	}
 
@@ -139,8 +143,7 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 }
 
 type upgradeCmd struct {
-	name string
-	dir  string
+	dir string
 }
 
 func (*upgradeCmd) Name() string { return "upgrade" }
@@ -148,8 +151,7 @@ func (*upgradeCmd) Synopsis() string {
 	return "Upgrades a buildpack scaffolded by buildpack-packager init"
 }
 func (u *upgradeCmd) SetFlags(f *flag.FlagSet) {
-	f.StringVar(&u.name, "name", "", "Name of the buildpack. Required.")
-	f.StringVar(&u.dir, "path", "", "Path to folder to create. Defaults to the name + '-buildpack' in the current directory.")
+	f.StringVar(&u.dir, "path", ".", "Path to folder to create. Defaults to the current directory.")
 }
 func (*upgradeCmd) Usage() string {
 	return `upgrade:
@@ -157,31 +159,21 @@ func (*upgradeCmd) Usage() string {
 `
 }
 func (u *upgradeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
-	if u.name == "" {
-		log.Printf("error: no name entered for new buildpack")
-		return subcommands.ExitUsageError
+	var err error
+	u.dir, err = filepath.Abs(u.dir)
+	if err != nil {
+		log.Printf("error: couldn't get absolute path to default directory: %v", err)
+		return subcommands.ExitFailure
 	}
 
-	// assume user doesn't want -buildpack in the language name
-	i.name = strings.TrimSuffix(i.name, "-buildpack")
-
-	if u.dir == "" {
-		absoluteDefaultDir, err := filepath.Abs(u.name + "-buildpack")
-		if err != nil {
-			log.Printf("error: couldn't get absolute path to default directory: %v", err)
-			return subcommands.ExitFailure
-		}
-		u.dir = absoluteDefaultDir
-	}
-
-	if exists, err := libbuildpack.FileExists(i.dir); err != nil {
+	if exists, err := libbuildpack.FileExists(u.dir); err != nil {
 		return subcommands.ExitFailure
 	} else if !exists {
-		log.Printf("error: directory %s does not exist", u.name)
+		log.Printf("error: directory %s does not exist", u.dir)
 		return subcommands.ExitUsageError
 	}
 
-	if err := packager.Upgrade(i.dir, i.name); err != nil {
+	if err := packager.Upgrade(u.dir); err != nil {
 		log.Printf("Error upgrading buildpack: %v", err)
 		return subcommands.ExitFailure
 	}

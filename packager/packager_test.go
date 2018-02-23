@@ -114,6 +114,24 @@ var _ = Describe("Packager", func() {
 		})
 	})
 
+	Describe("Upgrade", func() {
+		var baseDir string
+		BeforeEach(func() {
+			var err error
+			baseDir, err = ioutil.TempDir("", "scaffold-basedir")
+			Expect(err).To(BeNil())
+
+			Expect(libbuildpack.CopyDirectory("fixtures/modified", baseDir)).To(Succeed())
+
+			// run the code under test
+			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage")).To(Succeed())
+		})
+		AfterEach(func() {
+			os.RemoveAll(baseDir)
+		})
+
+	})
+
 	Describe("Package", func() {
 		var zipFile string
 		var cached bool
