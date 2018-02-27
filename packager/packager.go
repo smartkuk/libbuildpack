@@ -25,6 +25,10 @@ import (
 	yaml "gopkg.in/yaml.v2"
 )
 
+type sha struct {
+	Sha map[string]string `yaml:"sha"`
+}
+
 var CacheDir = filepath.Join(os.Getenv("HOME"), ".buildpack-packager", "cache")
 var Stdout, Stderr io.Writer = os.Stdout, os.Stderr
 
@@ -170,9 +174,8 @@ func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[strin
 	return nil
 }
 
-// END AUTO-GENERATED CODE (from bindata.go)
-// TODO: discuss a third function that Scaffold and Upgrade can call
-func Scaffold(bpDir string, languageName string, force bool) error {
+func generateAssets(bpDir, languageName string, force bool) error {
+
 	language := func() string {
 		return languageName
 	}
@@ -181,17 +184,9 @@ func Scaffold(bpDir string, languageName string, force bool) error {
 		"LANGUAGE": language,
 	}
 
-	type sha struct {
-		Sha map[string]string `yaml:"sha"`
-	}
-	var shas = map[string]string{}
-	if found, err := libbuildpack.FileExists(filepath.Join(bpDir, "sha.yml")); err != nil {
+	shas, err := readShaYML(bpDir)
+	if err != nil {
 		return err
-	} else if found {
-		shas, err = readShaYML(bpDir)
-		if err != nil {
-			return err
-		}
 	}
 
 	fmt.Fprintln(Stdout, "Creating directory and files")
@@ -203,7 +198,15 @@ func Scaffold(bpDir string, languageName string, force bool) error {
 		Sha: shas,
 	})
 
-	// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
+	if err := setupDep(bpDir, languageName); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func setupDep(bpDir, languageName string) error {
 	fmt.Fprintln(Stdout, "Installing dep")
 	cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
 	cmd.Stdout = Stdout
@@ -213,10 +216,7 @@ func Scaffold(bpDir string, languageName string, force bool) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
 	}
-	// TODO delete or uncommment
-	// if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
-	// 	return err
-	// }
+
 	fmt.Fprintln(Stdout, "Running dep ensure")
 	cmd = exec.Command(filepath.Join(bpDir, ".bin", "dep"), "ensure")
 	cmd.Stdout = Stdout
@@ -227,8 +227,11 @@ func Scaffold(bpDir string, languageName string, force bool) error {
 		fmt.Printf("GOPATH=%s\n", bpDir)
 		return fmt.Errorf("dep ensure: %s", err)
 	}
-
 	return nil
+}
+
+func Scaffold(bpDir string, languageName string) error {
+	return generateAssets(bpDir, languageName, false)
 }
 
 func Upgrade(bpDir string, force bool) error {
@@ -237,23 +240,24 @@ func Upgrade(bpDir string, force bool) error {
 		return fmt.Errorf("error opening manifest: %s", err)
 	}
 
-	return Scaffold(bpDir, manifest.Language, force)
+	return generateAssets(bpDir, manifest.Language, force)
 }
 
 func readShaYML(bpDir string) (map[string]string, error) {
-	type sha struct {
-		Sha map[string]string `yaml:"sha"`
-	}
-	shas := &sha{}
-	data, err := ioutil.ReadFile(filepath.Join(bpDir, "sha.yml"))
-	if err != nil {
+	if found, err := libbuildpack.FileExists(filepath.Join(bpDir, "sha.yml")); err != nil {
 		return map[string]string{}, err
+	} else if found {
+		shas := &sha{}
+		data, err := ioutil.ReadFile(filepath.Join(bpDir, "sha.yml"))
+		if err != nil {
+			return map[string]string{}, err
+		}
+		if err := yaml.Unmarshal(data, shas); err != nil {
+			return map[string]string{}, err
+		}
+		return shas.Sha, nil
 	}
-	if err := yaml.Unmarshal(data, shas); err != nil {
-		return map[string]string{}, err
-	}
-
-	return shas.Sha, nil
+	return map[string]string{}, nil
 }
 
 func readManifest(bpDir string) (*Manifest, error) {

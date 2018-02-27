@@ -126,7 +126,6 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 		return subcommands.ExitFailure
 	}
 
-	// TODO special case "." to ignore that it exists
 	if exists, err := libbuildpack.FileExists(i.dir); err != nil {
 		return subcommands.ExitFailure
 	} else if exists {
@@ -134,7 +133,7 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 		return subcommands.ExitUsageError
 	}
 
-	if err := packager.Scaffold(i.dir, i.name, false); err != nil {
+	if err := packager.Scaffold(i.dir, i.name); err != nil {
 		log.Printf("Error creating new buildpack scaffolding: %v", err)
 		return subcommands.ExitFailure
 	}

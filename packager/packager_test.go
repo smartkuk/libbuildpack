@@ -45,7 +45,7 @@ var _ = Describe("Packager", func() {
 			Expect(err).To(BeNil())
 
 			// run the code under test
-			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage", false)).To(Succeed())
+			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage")).To(Succeed())
 		})
 		AfterEach(func() {
 			os.RemoveAll(baseDir)
