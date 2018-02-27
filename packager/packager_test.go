@@ -45,7 +45,7 @@ var _ = Describe("Packager", func() {
 			Expect(err).To(BeNil())
 
 			// run the code under test
-			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage")).To(Succeed())
+			Expect(packager.Scaffold(filepath.Join(baseDir, "bpdir"), "mylanguage", false)).To(Succeed())
 		})
 		AfterEach(func() {
 			os.RemoveAll(baseDir)
@@ -102,6 +102,7 @@ var _ = Describe("Packager", func() {
 			By("creates a finalize cli src file", checkfileexists("bpdir/src/mylanguage/finalize/cli/main.go"))
 
 			By("creating unit tests that pass", func() {
+				//TODO: this is an integration test; move this into integration
 				command := exec.Command("./scripts/unit.sh")
 				command.Dir = filepath.Join(baseDir, "bpdir")
 				session, err := gexec.Start(command, GinkgoWriter, GinkgoWriter)
@@ -114,7 +115,7 @@ var _ = Describe("Packager", func() {
 		})
 	})
 
-	FDescribe("Upgrade", func() {
+	Describe("Upgrade", func() {
 		var baseDir string
 		BeforeEach(func() {
 			var err error
@@ -124,31 +125,59 @@ var _ = Describe("Packager", func() {
 			Expect(libbuildpack.CopyDirectory("fixtures/modified", baseDir)).To(Succeed())
 
 			// run the code under test
-			Expect(packager.Upgrade(baseDir)).To(Succeed())
 		})
 		AfterEach(func() {
 			os.RemoveAll(baseDir)
 		})
 
-		It("updates files user has NOT modified", func() {
-			file := "src/mylanguage/supply/supply_test.go"
-			current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
-			Expect(err).ToNot(HaveOccurred())
-			previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
-			Expect(err).ToNot(HaveOccurred())
+		Context("Force flag not set", func() {
+			BeforeEach(func() {
+				Expect(packager.Upgrade(baseDir, false)).To(Succeed())
+			})
+			It("updates files user has NOT modified", func() {
+				file := "src/mylanguage/supply/supply_test.go"
+				current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+				Expect(err).ToNot(HaveOccurred())
+				previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+				Expect(err).ToNot(HaveOccurred())
 
-			Expect(string(current)).ToNot(Equal(string(previous)))
+				Expect(string(current)).ToNot(Equal(string(previous)))
+			})
+			It("leaves files user HAS modified", func() {
+				file := "src/mylanguage/supply/supply.go"
+				current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+				Expect(err).ToNot(HaveOccurred())
+				previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(string(current)).To(Equal(string(previous)))
+			})
 		})
 
-		It("leaves files user HAS modified", func() {
-			file := "src/mylanguage/supply/supply.go"
-			current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
-			Expect(err).ToNot(HaveOccurred())
-			previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
-			Expect(err).ToNot(HaveOccurred())
+		Context("force flag is set", func() {
+			BeforeEach(func() {
+				Expect(packager.Upgrade(baseDir, true)).To(Succeed())
+			})
+			It("updates files user has NOT modified", func() {
+				file := "src/mylanguage/supply/supply_test.go"
+				current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+				Expect(err).ToNot(HaveOccurred())
+				previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+				Expect(err).ToNot(HaveOccurred())
 
-			Expect(string(current)).To(Equal(string(previous)))
+				Expect(string(current)).ToNot(Equal(string(previous)))
+			})
+			It("updates files user HAS modified", func() {
+				file := "src/mylanguage/supply/supply.go"
+				current, err := ioutil.ReadFile(filepath.Join(baseDir, file))
+				Expect(err).ToNot(HaveOccurred())
+				previous, err := ioutil.ReadFile(filepath.Join("fixtures", "modified", file))
+				Expect(err).ToNot(HaveOccurred())
+
+				Expect(string(current)).ToNot(Equal(string(previous)))
+			})
 		})
+
 	})
 
 	Describe("Package", func() {

@@ -134,7 +134,7 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 		return subcommands.ExitUsageError
 	}
 
-	if err := packager.Scaffold(i.dir, i.name); err != nil {
+	if err := packager.Scaffold(i.dir, i.name, false); err != nil {
 		log.Printf("Error creating new buildpack scaffolding: %v", err)
 		return subcommands.ExitFailure
 	}
@@ -143,7 +143,8 @@ func (i *initCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 }
 
 type upgradeCmd struct {
-	dir string
+	dir   string
+	force bool
 }
 
 func (*upgradeCmd) Name() string { return "upgrade" }
@@ -152,6 +153,7 @@ func (*upgradeCmd) Synopsis() string {
 }
 func (u *upgradeCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&u.dir, "path", ".", "Path to folder to create. Defaults to the current directory.")
+	f.BoolVar(&u.force, "force", false, "Regenerate files even if they have been modified")
 }
 func (*upgradeCmd) Usage() string {
 	return `upgrade:
@@ -173,7 +175,7 @@ func (u *upgradeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{
 		return subcommands.ExitUsageError
 	}
 
-	if err := packager.Upgrade(u.dir); err != nil {
+	if err := packager.Upgrade(u.dir, u.force); err != nil {
 		log.Printf("Error upgrading buildpack: %v", err)
 		return subcommands.ExitFailure
 	}

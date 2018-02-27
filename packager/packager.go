@@ -83,7 +83,7 @@ func checksumHex(b []byte) string {
 // START AUTO-GENERATED CODE (from bindata.go)
 // RestoreAsset restores an asset under the given directory
 // TODO: maybe make scaffold into a struct and split up packager and scaffold if they don't share anything
-func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string]string) error {
+func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string]string, force bool) error {
 	data, err := Asset(name)
 
 	if err != nil {
@@ -124,7 +124,7 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string
 	if name == "bin/supply" {
 		fmt.Println(name, oldSha256, shas[name])
 	}
-	if shas[name] != "" && shas[name] != oldSha256 {
+	if !force && shas[name] != "" && shas[name] != oldSha256 {
 		fmt.Fprintf(Stdout, "***Ignoring %s becuase it has been modified***\n", name)
 		return nil
 	}
@@ -149,12 +149,12 @@ func OurRestoreAsset(dir, name string, funcMap template.FuncMap, shas map[string
 }
 
 // RestoreAssets restores an asset under the given directory recursively
-func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[string]string) error {
+func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[string]string, force bool) error {
 	//TODO: is passing in the shas map the best way to go about this?
 	children, err := AssetDir(name)
 	// File
 	if err != nil {
-		err = OurRestoreAsset(dir, name, funcMap, shas)
+		err = OurRestoreAsset(dir, name, funcMap, shas, force)
 		if err != nil {
 			return err
 		}
@@ -162,7 +162,7 @@ func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[strin
 
 	// Dir
 	for _, child := range children {
-		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap, shas)
+		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap, shas, force)
 		if err != nil {
 			return err
 		}
@@ -171,8 +171,8 @@ func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[strin
 }
 
 // END AUTO-GENERATED CODE (from bindata.go)
-
-func Scaffold(bpDir string, languageName string) error {
+// TODO: discuss a third function that Scaffold and Upgrade can call
+func Scaffold(bpDir string, languageName string, force bool) error {
 	language := func() string {
 		return languageName
 	}
@@ -195,7 +195,7 @@ func Scaffold(bpDir string, languageName string) error {
 	}
 
 	fmt.Fprintln(Stdout, "Creating directory and files")
-	if err := OurRestoreAssets(bpDir, "", funcMap, shas); err != nil {
+	if err := OurRestoreAssets(bpDir, "", funcMap, shas, force); err != nil {
 		return err
 	}
 
@@ -203,43 +203,41 @@ func Scaffold(bpDir string, languageName string) error {
 		Sha: shas,
 	})
 
-	if false {
-		// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
-		fmt.Fprintln(Stdout, "Installing dep")
-		cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
-		cmd.Stdout = Stdout
-		cmd.Stderr = Stderr
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
-		cmd.Dir = bpDir
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
-		}
-		// TODO delete or uncommment
-		// if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
-		// 	return err
-		// }
-		fmt.Fprintln(Stdout, "Running dep ensure")
-		cmd = exec.Command(filepath.Join(bpDir, ".bin", "dep"), "ensure")
-		cmd.Stdout = Stdout
-		cmd.Stderr = Stderr
-		cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
-		cmd.Dir = filepath.Join(bpDir, "src", languageName)
-		if err := cmd.Run(); err != nil {
-			fmt.Printf("GOPATH=%s\n", bpDir)
-			return fmt.Errorf("dep ensure: %s", err)
-		}
+	// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
+	fmt.Fprintln(Stdout, "Installing dep")
+	cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
+	cmd.Stdout = Stdout
+	cmd.Stderr = Stderr
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
+	cmd.Dir = bpDir
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("go get -u github.com/golang/dep/cmd/dep: %s", err)
+	}
+	// TODO delete or uncommment
+	// if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
+	// 	return err
+	// }
+	fmt.Fprintln(Stdout, "Running dep ensure")
+	cmd = exec.Command(filepath.Join(bpDir, ".bin", "dep"), "ensure")
+	cmd.Stdout = Stdout
+	cmd.Stderr = Stderr
+	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
+	cmd.Dir = filepath.Join(bpDir, "src", languageName)
+	if err := cmd.Run(); err != nil {
+		fmt.Printf("GOPATH=%s\n", bpDir)
+		return fmt.Errorf("dep ensure: %s", err)
 	}
 
 	return nil
 }
 
-func Upgrade(bpDir string) error {
+func Upgrade(bpDir string, force bool) error {
 	manifest, err := readManifest(bpDir)
 	if err != nil {
 		return fmt.Errorf("error opening manifest: %s", err)
 	}
 
-	return Scaffold(bpDir, manifest.Language)
+	return Scaffold(bpDir, manifest.Language, force)
 }
 
 func readShaYML(bpDir string) (map[string]string, error) {
