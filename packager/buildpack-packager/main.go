@@ -97,7 +97,7 @@ func (*initCmd) Synopsis() string {
 	return "Creates a folder with the basic structure of a new buildpack"
 }
 func (i *initCmd) SetFlags(f *flag.FlagSet) {
-	f.StringVar(&i.name, "name", "", "Name of the buildpack. Required.") // TODO convert to positional argument
+	f.StringVar(&i.name, "name", "", "Name of the buildpack. Required.")
 	f.StringVar(&i.dir, "path", "", "Path to folder to create. Defaults to the name + '-buildpack' in the current directory.")
 }
 func (*initCmd) Usage() string {
