@@ -16,13 +16,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"text/template"
 
 	"github.com/cloudfoundry/libbuildpack"
-	yaml "gopkg.in/yaml.v2"
 )
 
 var CacheDir = filepath.Join(os.Getenv("HOME"), ".buildpack-packager", "cache")
+var Stdout, Stderr io.Writer = os.Stdout, os.Stderr
 
 func CompileExtensionPackage(bpDir, version string, cached bool) (string, error) {
 	bpDir, err := filepath.Abs(bpDir)
@@ -44,8 +43,8 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 		isCached = "--cached"
 	}
 	cmd := exec.Command("bundle", "exec", "buildpack-packager", isCached)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = Stdout
+	cmd.Stderr = Stderr
 	cmd.Env = append(os.Environ(), "BUNDLE_GEMFILE=cf.Gemfile")
 	cmd.Dir = dir
 	if err := cmd.Run(); err != nil {
@@ -71,126 +70,6 @@ func CompileExtensionPackage(bpDir, version string, cached bool) (string, error)
 	return filepath.Join(dir, zipFile), nil
 }
 
-// START AUTO-GENERATED CODE (from bindata.go)
-// RestoreAsset restores an asset under the given directory
-func OurRestoreAsset(dir, name string, funcMap template.FuncMap) error {
-	data, err := Asset(name)
-
-	if err != nil {
-		return err
-	}
-
-	info, err := AssetInfo(name)
-	if err != nil {
-		return err
-	}
-	err = os.MkdirAll(_filePath(dir, filepath.Dir(name)), os.FileMode(0755))
-	if err != nil {
-		return err
-	}
-
-	// START NON-AUTO-GENERATED CODE
-	t, err := template.New("").Funcs(funcMap).Parse(string(data))
-	if err != nil {
-		return err
-	}
-	f, err := os.OpenFile(_filePath(dir, name), os.O_RDWR|os.O_CREATE, info.Mode())
-	if err != nil {
-		return err
-	}
-	if err := t.Execute(f, nil); err != nil {
-		return err
-	}
-
-	f.Close()
-	// END NON-AUTO-GENERATED CODE
-
-	err = os.Chtimes(_filePath(dir, name), info.ModTime(), info.ModTime())
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// RestoreAssets restores an asset under the given directory recursively
-func OurRestoreAssets(dir, name string, funcMap template.FuncMap, shas map[string]string) error {
-	//TODO: is passing in the shas map the best way to go about this?
-	children, err := AssetDir(name)
-	// File
-	if err != nil {
-		err = OurRestoreAsset(dir, name, funcMap)
-		if err != nil {
-			return err
-		}
-		content, err := ioutil.ReadFile(_filePath(dir, name))
-		if err != nil {
-			return err
-		}
-		sum := sha256.Sum256(content)
-
-		actualSha256 := hex.EncodeToString(sum[:])
-		shas[name] = actualSha256
-		return nil
-	}
-	// Dir
-	for _, child := range children {
-		err = OurRestoreAssets(dir, filepath.Join(name, child), funcMap, shas)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// END AUTO-GENERATED CODE (from bindata.go)
-
-func Scaffold(bpDir string, languageName string) error {
-	language := func() string {
-		return languageName
-	}
-
-	funcMap := template.FuncMap{
-		"LANGUAGE": language,
-	}
-
-	fmt.Println("Creating directory and files")
-	var shas = map[string]string{}
-	if err := OurRestoreAssets(bpDir, "", funcMap, shas); err != nil {
-		return err
-	}
-	type sha struct {
-		Sha map[string]string `yaml:"sha"`
-	}
-
-	libbuildpack.NewYAML().Write(filepath.Join(bpDir, "sha.yml"), sha{
-		Sha: shas,
-	})
-
-	if err := os.Rename(filepath.Join(bpDir, "src", "LANGUAGE"), filepath.Join(bpDir, "src", languageName)); err != nil {
-		return err
-	}
-
-	// Install dep and download dependencies (gomega, ginkgo, libbuildpack, etc)
-	fmt.Println("Installing dep")
-	cmd := exec.Command("go", "get", "-u", "github.com/golang/dep/cmd/dep")
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("GOBIN=%s/.bin", bpDir), fmt.Sprintf("GOPATH=%s", bpDir))
-	cmd.Dir = bpDir
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	if err := os.Rename(filepath.Join(bpDir, "src", "github.com"), filepath.Join(bpDir, "src", languageName, "vendor", "github.com")); err != nil {
-		return err
-	}
-	fmt.Println("Running dep ensure")
-	c := libbuildpack.Command{}
-	c.Execute(filepath.Join(bpDir, "src", languageName), os.Stdout, os.Stderr, "dep", "ensure")
-
-	return nil
-}
-
 func Package(bpDir, cacheDir, version string, cached bool) (string, error) {
 	bpDir, err := filepath.Abs(bpDir)
 	if err != nil {
@@ -206,12 +85,8 @@ func Package(bpDir, cacheDir, version string, cached bool) (string, error) {
 		return "", err
 	}
 
-	manifest := Manifest{}
-	data, err := ioutil.ReadFile(filepath.Join(dir, "manifest.yml"))
+	manifest, err := readManifest(dir)
 	if err != nil {
-		return "", err
-	}
-	if err := yaml.Unmarshal(data, &manifest); err != nil {
 		return "", err
 	}
 
@@ -220,7 +95,7 @@ func Package(bpDir, cacheDir, version string, cached bool) (string, error) {
 		cmd.Dir = dir
 		out, err := cmd.CombinedOutput()
 		if err != nil {
-			fmt.Println(string(out))
+			fmt.Fprintln(Stdout, string(out))
 			return "", err
 		}
 	}
