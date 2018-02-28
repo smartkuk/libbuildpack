@@ -113,15 +113,27 @@ var _ = Describe("Stager", func() {
 		})
 	})
 
-	Describe("WriteConfigYml", func() {
+	FDescribe("WriteConfigYml", func() {
 		It("creates a file in the <depDir>/idx directory", func() {
-			err := s.WriteConfigYml(nil)
-			Expect(err).To(BeNil())
+			Expect(s.WriteConfigYml(nil)).To(Succeed())
 
-			contents, err := ioutil.ReadFile(filepath.Join(s.DepDir(), "config.yml"))
-			Expect(err).To(BeNil())
+			config := struct {
+				Name string `yaml:"name"`
+			}{}
+			Expect(libbuildpack.NewYAML().Load(filepath.Join(s.DepDir(), "config.yml"), &config)).To(Succeed())
 
-			Expect(string(contents)).To(Equal("config: {}\nname: dotnet-core\n"))
+			Expect(config.Name).To(Equal("dotnet-core"))
+		})
+
+		It("sets buildpack version in file", func() {
+			Expect(s.WriteConfigYml(nil)).To(Succeed())
+
+			config := struct {
+				Version string `yaml:"version"`
+			}{}
+			libbuildpack.NewYAML().Load(filepath.Join(s.DepDir(), "config.yml"), &config)
+
+			Expect(config.Version).To(Equal("99.99"))
 		})
 
 		It("writes passed config struct to file", func() {
