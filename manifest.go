@@ -294,8 +294,21 @@ func (m *Manifest) warnNewerPatch(dep Dependency) error {
 		return nil
 	}
 
-	constraint := fmt.Sprintf("%d.%d.x", v.Major(), v.Minor())
-	latest, err := FindMatchingVersion(constraint, versions)
+	constraintMajorMinor := fmt.Sprintf("%d.%d.x", v.Major(), v.Minor())
+	matchingMajorMinors, err := FindMatchingVersions(constraintMajorMinor, versions)
+	if err != nil {
+		return nil
+	}
+
+	var latest, constraint string
+
+	if len(matchingMajorMinors) > 1 {
+		constraint = constraintMajorMinor
+	} else {
+		constraint = fmt.Sprintf("%d.x", v.Major())
+	}
+
+	latest, err = FindMatchingVersion(constraint, versions)
 	if err != nil {
 		return err
 	}

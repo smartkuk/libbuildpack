@@ -192,6 +192,11 @@ ruby:
 			Expect(versions).To(Equal([]string{"1.0.0", "1.0.1", "1.0.3", "1.1.0"}))
 		})
 
+		It("returns all the versions of the dependency where the minor version increments", func() {
+			versions := manifest.AllDependencyVersions("node_pivotal")
+			Expect(versions).To(Equal([]string{"9.4.11", "9.5.0"}))
+		})
+
 		Context("CF_STACK = xenial", func() {
 			BeforeEach(func() {
 				manifestDir = "fixtures/manifest/stacks"
@@ -685,11 +690,17 @@ ruby:
 				manifestDir = "fixtures/manifest/fetch"
 			})
 			Context("url exists and matches sha256", func() {
+				var (
+					tgzContents []byte
+					err error
+				 	tgzContentStr string
+				 )
 				BeforeEach(func() {
-					tgzContents, err := ioutil.ReadFile("fixtures/thing.tgz")
+					tgzContents, err = ioutil.ReadFile("fixtures/thing.tgz")
+					tgzContentStr = string(tgzContents)
 					Expect(err).To(BeNil())
 					httpmock.RegisterResponder("GET", "https://example.com/dependencies/real_tar_file-3-linux-x64.tgz",
-						httpmock.NewStringResponder(200, string(tgzContents)))
+						httpmock.NewStringResponder(200, tgzContentStr))
 				})
 
 				It("logs the name and version of the dependency", func() {
@@ -722,6 +733,24 @@ ruby:
 
 					Expect(filepath.Join(outputDir, "thing", "bin", "file2.exe")).To(BeAnExistingFile())
 					Expect(ioutil.ReadFile(filepath.Join(outputDir, "thing", "bin", "file2.exe"))).To(Equal([]byte("progam2\n")))
+				})
+
+				Context("version is not latest, and latest version has an incremented value for minor version", func () {
+
+					BeforeEach(func() {
+						Expect(err).To(BeNil())
+						httpmock.RegisterResponder("GET", "https://example.com/dependencies/node_pivotal-9.4.11-linux-x64.tgz",
+							httpmock.NewStringResponder(200, tgzContentStr))
+					})
+
+					It("latest version has an incremented value for minor version", func () {
+						err = manifest.InstallDependency(libbuildpack.Dependency{Name: "node_pivotal", Version: "9.4.11"}, outputDir)
+						Expect(err).To(BeNil())
+						patchWarning := "**WARNING** A newer version of node_pivotal is available in this buildpack. " +
+							"Please adjust your app to use version 9.5.0 instead of version 9.4.11 as soon as possible. " +
+							"Old versions of node_pivotal are only provided to assist in migrating to newer versions.\n"
+						Expect(buffer.String()).To(ContainSubstring(patchWarning))
+					})
 				})
 
 				Context("version is NOT latest in version line", func() {
