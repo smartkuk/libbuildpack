@@ -2,14 +2,15 @@ package shims
 
 import (
 	"fmt"
-	"github.com/BurntSushi/toml"
-	"gopkg.in/yaml.v2"
 	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
+
+	"github.com/BurntSushi/toml"
+	"gopkg.in/yaml.v2"
 )
 
 const setupPathContent = "export PATH={{ range $_, $path := . }}{{ $path }}:{{ end }}$PATH"
@@ -19,7 +20,7 @@ type Shimmer interface {
 	Supply(binDir, buildpacksDir, cacheDir, groupMetadata, launchDir, planMetadata, platformDir string) error
 }
 
-type Shim struct {}
+type Shim struct{}
 
 func (s *Shim) Detect(binDir, buildpacksDir, groupMetadata, launchDir, orderMetadata, planMetadata string) error {
 	cmd := exec.Command(
@@ -52,7 +53,6 @@ func (s *Shim) Supply(binDir, buildpacksDir, cacheDir, groupMetadata, launchDir,
 
 	return cmd.Run()
 }
-
 
 func Detect(s Shimmer, buildpackDir, workspaceDir string) error {
 	return s.Detect(

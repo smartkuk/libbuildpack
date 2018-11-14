@@ -1,13 +1,16 @@
 package main
 
 import (
-	"github.com/cloudfoundry/libbuildpack/shims"
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+
+	"github.com/cloudfoundry/libbuildpack/shims"
 )
 
 func main() {
+	fmt.Printf("HEYYYYYY")
 	buildpackDir := filepath.Join(os.Args[0], "..", "..")
 	workspaceDir := filepath.Join(os.Args[1], "..")
 

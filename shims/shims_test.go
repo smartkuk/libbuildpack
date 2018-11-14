@@ -2,13 +2,14 @@ package shims_test
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/cloudfoundry/libbuildpack/shims"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 )
 
 //go:generate mockgen -source=shims.go --destination=mocks_shims_test.go --package=shims_test
@@ -76,7 +77,6 @@ var _ = Describe("Shims", func() {
 			BeforeEach(func() {
 				Expect(ioutil.WriteFile(filepath.Join(workspaceDir, "group.toml"), []byte(""), 0666)).To(Succeed())
 				Expect(ioutil.WriteFile(filepath.Join(workspaceDir, "plan.toml"), []byte(""), 0666)).To(Succeed())
-			})
 
 			It("runs with the correct arguments and moves things to the correct place", func() {
 				mockShimmer.
@@ -100,6 +100,7 @@ var _ = Describe("Shims", func() {
 				Expect(filepath.Join(buildDir, "metadata.toml")).To(BeAnExistingFile())
 				Expect(filepath.Join(depsDir, "0", "test.txt")).To(BeAnExistingFile())
 			})
+
 		})
 
 		Context("when the group.toml and plan.toml do not exist", func() {
