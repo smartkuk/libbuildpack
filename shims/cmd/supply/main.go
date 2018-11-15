@@ -2,11 +2,12 @@ package main
 
 import (
 	"fmt"
-	"path/filepath"
-	"time"
-
-	"github.com/buildpack/lifecycle"
+	"github.com/BurntSushi/toml"
 	"github.com/cloudfoundry/libbuildpack"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
 func main() {
@@ -17,52 +18,54 @@ func main() {
 	// depsIndex := os.Args[4]
 	// workspaceDir := filepath.Join(buildDir, "..")
 	// launchDir := filepath.Join(string(filepath.Separator), "home", "vcap", "deps", depsIndex)
-
 	// err := os.MkdirAll(launchDir, 0777)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
 	// defer os.RemoveAll(launchDir)
-
 	// err = shims.Supply(&shims.Shim{}, buildpackDir, buildDir, cacheDir, depsDir, depsIndex, workspaceDir, launchDir)
 	// if err != nil {
 	// 	log.Fatal(err)
 	// }
-	// buildpackDir := os.Args[0]
 
-	// buildpacks, err := lifecycle.NewBuildpackMap(buildpackDir)
-	// if err != nil {
-	// 	fmt.Printf(err.Error())
-	// }
-
-	// How do we get access to buildpack map instead of hardcoding it here?
-	bpMap := lifecycle.BuildpackMap{
-		"org.cloudfoundry.buildpacks.npm@latest": {
-			Name: "npm",
-		},
-		"org.cloudfoundry.buildpacks.nodejs@latest": {
-			Name: "nodejs",
-		},
+	type buildpack struct {
+		Id string
+		Version string
+	}
+	type group struct {
+		Labels []string
+		Buildpacks []buildpack
+	}
+	type Order struct {
+		Groups []group
 	}
 
-	var order lifecycle.BuildpackOrder
-	orderPath, _ := filepath.Abs(filepath.Join("order.toml"))
-	order, err := bpMap.ReadOrder(orderPath)
+	cwd, _ := os.Getwd()
+	orderPath := filepath.Join(cwd, "order.toml")
+	fmt.Println("orderpath", orderPath)
+
+	var order Order
+	_, err := toml.DecodeFile(orderPath, &order)
 	if err != nil {
-		fmt.Printf(err.Error())
+		fmt.Println(err)
 	}
 
-	fmt.Printf("\n\nbuildpack name %v\n", order[0].Buildpacks[0].Name)
-	fmt.Printf("buildpack version %v\n", order[0].Buildpacks[0].Version)
-	// group, err := lifecycle.ReadOrderTOML(orderPath)
-	// if err != nil {
-	// 	fmt.Printf(err.Error())
-	// }
+	manifest, err := libbuildpack.NewManifest(cwd, libbuildpack.NewLogger(os.Stdout), time.Now())
+	for _, group := range order.Groups {
+		for _, bp := range group.Buildpacks {
 
-	// Search manifest for bp name +version for URl
-	manifestDir := filepath.Join("manifest.yml")
-	manifest, err = libbuildpack.NewManifest(manifestDir, nil, time.Now())
-	// Install node-v3
-	// Install npm v3
+			ids := strings.Split(bp.Id, ".")
+			name := fmt.Sprintf("%s-cnb", ids[len(ids)-1])
+			dep, err := manifest.DefaultVersion(name)
+			if err != nil {
+				fmt.Println(err)
+			}
+			entry, err := manifest.GetEntry(dep)
+			if err != nil {
+				fmt.Println(err)
+			}
+			fmt.Printf("entry %+v\n", entry)
+		}
+	}
 
 }
