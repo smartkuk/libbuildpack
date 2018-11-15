@@ -180,6 +180,9 @@ func (m *Manifest) Version() (string, error) {
 
 func (m *Manifest) CheckStackSupport() error {
 	requiredStack := os.Getenv("CF_STACK")
+	if requiredStack == "" {
+		m.log.Error("CF_STACK is not set. Provide to check stack support")
+	}
 
 	if m.manifestSupportsStack(requiredStack) {
 		return nil
@@ -292,6 +295,9 @@ func (m *Manifest) entrySupportsStack(entry *ManifestEntry, stack string) bool {
 func (m *Manifest) AllDependencyVersions(depName string) []string {
 	var depVersions []string
 	currentStack := os.Getenv("CF_STACK")
+	if currentStack == "" {
+		m.log.Error("CF_STACK is not set. Provide to retrieve all dependency versions")
+	}
 
 	for _, e := range m.ManifestEntries {
 		if e.Dependency.Name == depName && m.entrySupportsStack(&e, currentStack) {
@@ -304,6 +310,9 @@ func (m *Manifest) AllDependencyVersions(depName string) []string {
 
 func (m *Manifest) GetEntry(dep Dependency) (*ManifestEntry, error) {
 	currentStack := os.Getenv("CF_STACK")
+	if currentStack == "" {
+		m.log.Error("CF_STACK is not set. Provide to get manifest entry")
+	}
 
 	for _, e := range m.ManifestEntries {
 		if e.Dependency == dep && m.entrySupportsStack(&e, currentStack) {
