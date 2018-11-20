@@ -2,58 +2,31 @@ package shims_test
 
 import (
 	"bytes"
+	"io/ioutil"
+	"os"
+	"path/filepath"
+
 	"github.com/cloudfoundry/libbuildpack/shims"
 	"github.com/golang/mock/gomock"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"io/ioutil"
-	"os"
-	"path/filepath"
 )
 
-//go:generate mockgen -source=shims.go --destination=mocks_shims_test.go --package=shims_test
+//go:generate mockgen -source=supplier.go --destination=mocks_shims_test.go --package=shims_test
 
 var _ = Describe("Shims", func() {
-	Describe("Detect", func() {
-		var (
-			mockCtrl    *gomock.Controller
-			mockShimmer *MockShimmer
-		)
-
-		BeforeEach(func() {
-			mockCtrl = gomock.NewController(GinkgoT())
-			mockShimmer = NewMockShimmer(mockCtrl)
-		})
-
-		It("runs with the correct arguments", func() {
-			mockShimmer.
-				EXPECT().
-				Detect(
-					filepath.Join("buildpack-dir", "bin"),
-					filepath.Join("buildpack-dir", "cnbs"),
-					filepath.Join("build-dir", "group.toml"),
-					"build-dir",
-					filepath.Join("buildpack-dir", "order.toml"),
-					filepath.Join("build-dir", "plan.toml"),
-				).
-				Times(1)
-
-			Expect(shims.Detect(mockShimmer, "buildpack-dir", "build-dir")).To(Succeed())
-		})
-	})
-
 	Describe("Supply", func() {
 		var (
-			mockCtrl                                   *gomock.Controller
-			mockShimmer                                *MockShimmer
-			buildDir, depsDir, launchDir, workspaceDir string
+			mockCtrl                                                                                                                           *gomock.Controller
+			mockDetector                                                                                                                       *MockDetector
+			binDir, buildDir, buildpacksDir, cacheDir, depsDir, depsIndex, groupMetadata, launchDir, orderMetadata, planMetadata, workspaceDir string
 		)
 
 		BeforeEach(func() {
 			var err error
 
 			mockCtrl = gomock.NewController(GinkgoT())
-			mockShimmer = NewMockShimmer(mockCtrl)
+			mockDetector = NewMockDetector(mockCtrl)
 
 			workspaceDir, err = ioutil.TempDir("", "workspace")
 			Expect(err).NotTo(HaveOccurred())
@@ -66,6 +39,7 @@ var _ = Describe("Shims", func() {
 
 			launchDir = filepath.Join(workspaceDir, "launch")
 			Expect(os.MkdirAll(filepath.Join(launchDir, "config"), 0777)).To(Succeed())
+
 		})
 
 		AfterEach(func() {
@@ -79,26 +53,11 @@ var _ = Describe("Shims", func() {
 			})
 
 			It("runs with the correct arguments and moves things to the correct place", func() {
-				mockShimmer.
+				mockDetector.
 					EXPECT().
-					Supply(
-						filepath.Join("buildpack-dir", "bin"),
-						filepath.Join("buildpack-dir", "cnbs"),
-						"cache-dir",
-						filepath.Join(workspaceDir, "group.toml"),
-						launchDir,
-						filepath.Join(workspaceDir, "plan.toml"),
-						workspaceDir,
-					).
-					Do(func(args ...string) {
-						Expect(ioutil.WriteFile(filepath.Join(launchDir, "test.txt"), []byte("hello"), 0666)).To(Succeed())
-						Expect(ioutil.WriteFile(filepath.Join(launchDir, "config", "metadata.toml"), []byte("howdy"), 0666)).To(Succeed())
-					}).
-					Times(1)
-
-				Expect(shims.Supply(mockShimmer, "buildpack-dir", buildDir, "cache-dir", depsDir, "0", workspaceDir, launchDir)).To(Succeed())
-				Expect(filepath.Join(buildDir, "metadata.toml")).To(BeAnExistingFile())
-				Expect(filepath.Join(depsDir, "0", "test.txt")).To(BeAnExistingFile())
+					Detect().
+					Times(0)
+				Expect(supplier.GetBuildPlan()).To(Succeed())
 			})
 		})
 
@@ -113,7 +72,7 @@ var _ = Describe("Shims", func() {
 						workspaceDir,
 						filepath.Join("buildpack-dir", "order.toml"),
 						filepath.Join(workspaceDir, "plan.toml"),
-					).Times(1)
+					)
 
 				mockShimmer.
 					EXPECT().
@@ -129,8 +88,7 @@ var _ = Describe("Shims", func() {
 					Do(func(args ...string) {
 						Expect(ioutil.WriteFile(filepath.Join(launchDir, "test.txt"), []byte("hello"), 0666)).To(Succeed())
 						Expect(ioutil.WriteFile(filepath.Join(launchDir, "config", "metadata.toml"), []byte("howdy"), 0666)).To(Succeed())
-					}).
-					Times(1)
+					})
 
 				Expect(shims.Supply(mockShimmer, "buildpack-dir", buildDir, "cache-dir", depsDir, "0", workspaceDir, launchDir)).To(Succeed())
 				Expect(filepath.Join(buildDir, "metadata.toml")).To(BeAnExistingFile())
